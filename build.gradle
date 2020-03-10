@@ -22,7 +22,7 @@ mainClassName = "uk.co.azquelt.slackstacker.SlackStacker"
 dependencies {
     compile 'com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:2.6.3'
     compile 'org.apache.cxf:cxf-rt-rs-client:3.0.+'
-    
+    compile group: 'com.rometools', name: 'rome', version: '1.12.2'
     testCompile 'junit:junit:4.+'
 }
 

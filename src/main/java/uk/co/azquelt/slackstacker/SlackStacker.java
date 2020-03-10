@@ -26,6 +26,8 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 
+import uk.co.azquelt.slackstacker.imwuc.IMWUCEntry;
+import uk.co.azquelt.slackstacker.imwuc.IMWUCFeed;
 import uk.co.azquelt.slackstacker.slack.SlackMessage;
 import uk.co.azquelt.slackstacker.stack.Question;
 import uk.co.azquelt.slackstacker.stack.QuestionResponse;
@@ -76,6 +78,14 @@ public class SlackStacker {
 				}
 
 				saveState(newState, config.stateFile);
+
+
+				List<IMWUCEntry> imwuc_results = IMWUCFeed.getEntries(oldState.lastUpdated.getTime());
+				if (imwuc_results != null) { 
+					IMWUCFeed.postEntries(imwuc_results, config.slackWebhookUrl);
+				}
+
+
 			} else {
 				System.out.println("No pre-existing state, setting up default state file");
 				State newState = createDefaultState(now);
@@ -116,18 +126,17 @@ public class SlackStacker {
 		if (newQuestions.size() == 0) {
 			return; //Nothing to post!
 		}
-		
-		WebTarget target = client.target(webhookUrl);
-		
 		for (Question question : newQuestions) {
-			SlackMessage message = MessageBuilder.buildMessage(question);
-			
-			Invocation.Builder builder = target.request();
-	
-			Response resp = builder.post(Entity.entity(message, MediaType.APPLICATION_JSON_TYPE));
-			if (resp.getStatusInfo().getFamily() != Family.SUCCESSFUL) {
-				throw new IOException("Error posting questions to slack: " + resp.getStatusInfo().getReasonPhrase());
-			}
+			post(MessageBuilder.buildMessage(question), webhookUrl);
+		}
+	}
+
+	public static void post(SlackMessage message, String webhookUrl) throws IOException { 
+		WebTarget target = client.target(webhookUrl);
+		Invocation.Builder builder = target.request();
+	    Response resp = builder.post(Entity.entity(message, MediaType.APPLICATION_JSON_TYPE));
+		if (resp.getStatusInfo().getFamily() != Family.SUCCESSFUL) {
+			throw new IOException("Error posting messages to slack: " + resp.getStatusInfo().getReasonPhrase());
 		}
 	}
 
