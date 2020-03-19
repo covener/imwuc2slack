@@ -6,41 +6,32 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.TimeZone;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Entity;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status.Family;
-
-import org.apache.cxf.transport.common.gzip.GZIPFeature;
-
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
+
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 
 import uk.co.azquelt.slackstacker.imwuc.IMWUCEntry;
 import uk.co.azquelt.slackstacker.imwuc.IMWUCFeed;
 import uk.co.azquelt.slackstacker.slack.SlackMessage;
 
 public class IMWUC {
-	
-	private static ObjectMapper stateMapper;
-	
-	private static Client client = ClientBuilder.newBuilder()
-			.register(JacksonJsonProvider.class) // Allow us to serialise JSON <-> POJO
-			.register(GZIPFeature.class) // Allow us to understand GZIP compressed pages
-			.build();
 
-	private static void saveState(State newState, String stateFileName) throws JsonGenerationException, JsonMappingException, IOException {
+	private static ObjectMapper stateMapper;
+
+	private static void saveState(State newState, String stateFileName)
+			throws JsonGenerationException, JsonMappingException, IOException {
 		File stateFile = new File(stateFileName);
 		stateMapper.writerWithDefaultPrettyPrinter().forType(State.class).writeValue(stateFile, newState);
 	}
-	
+
 	private static State createDefaultState(Calendar now) {
 		State newState = new State();
 		newState.lastUpdated = now;
@@ -53,15 +44,20 @@ public class IMWUC {
 		return newState;
 	}
 
-	static { 
+	static {
 		stateMapper = new ObjectMapper();
 	}
-	public static void post(SlackMessage message, String webhookUrl) throws IOException { 
-		WebTarget target = client.target(webhookUrl);
-		Invocation.Builder builder = target.request();
-	    Response resp = builder.post(Entity.entity(message, MediaType.APPLICATION_JSON_TYPE));
-		if (resp.getStatusInfo().getFamily() != Family.SUCCESSFUL) {
-			throw new IOException("Error posting messages to slack: " + resp.getStatusInfo().getReasonPhrase());
+
+	public static void post(SlackMessage message, String webhookUrl) throws IOException {
+		CloseableHttpClient httpclient = HttpClients.createDefault();
+		HttpPost httpPost = new HttpPost(webhookUrl);
+		ObjectMapper mapper = new ObjectMapper();
+		String jsonStr = mapper.writeValueAsString(message);
+		StringEntity requestEntity = new StringEntity(jsonStr, ContentType.APPLICATION_JSON);
+		httpPost.setEntity(requestEntity);
+		CloseableHttpResponse resp = httpclient.execute(httpPost);
+		if (resp.getStatusLine().getStatusCode() != 200) { 
+			throw new IOException("Error posting messages to slack: " + resp);
 		}
 	}
 
