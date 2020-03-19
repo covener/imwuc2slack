@@ -1,4 +1,6 @@
 {
     "slack-webhook-url" : "my-incoming-webhook-url",
-    "state-file" : "/opt/slackstacker.state"
+    "state-file" : "/opt/slackstacker.state",
+    "channel"    : "was-cov-test"
+    "feedURL"    : "https://community.ibm.com/community/user/imwuc/rssgenerator?UserKey=..."
 }

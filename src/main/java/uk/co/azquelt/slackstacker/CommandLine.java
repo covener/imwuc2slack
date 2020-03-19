@@ -9,7 +9,7 @@ import java.util.Iterator;
  */
 public class CommandLine {
 	
-	private File configFile;
+	private File configFile = new File("slackstacker.config");
 	
 	private CommandLine() {}
 	
@@ -20,6 +20,9 @@ public class CommandLine {
 		while (i.hasNext()) {
 			String arg = i.next();
 			switch (arg) {
+			case "-h":
+				System.out.println("Usage: ... -f config-file");
+				break;
 			case "-f":
 				String file = i.next();
 				validateFile("-f", file);

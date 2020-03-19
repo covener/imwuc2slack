@@ -53,6 +53,9 @@ public class IMWUC {
 		return newState;
 	}
 
+	static { 
+		stateMapper = new ObjectMapper();
+	}
 	public static void post(SlackMessage message, String webhookUrl) throws IOException { 
 		WebTarget target = client.target(webhookUrl);
 		Invocation.Builder builder = target.request();
@@ -78,7 +81,7 @@ public class IMWUC {
 		return state;
 	}
 	
-	private static Config loadConfig(File configFile) throws JsonProcessingException, IOException, InvalidArgumentException {
+	public static Config loadConfig(File configFile) throws JsonProcessingException, IOException, InvalidArgumentException {
 		if (configFile == null) {
 			throw new InvalidArgumentException("Config file is not set");
 		}
@@ -95,7 +98,6 @@ public class IMWUC {
 	public static void main(String[] args) throws IOException {
 		
 		try {
-			stateMapper = new ObjectMapper();
 			
 			CommandLine arguments = CommandLine.processArgs(args);
 			
@@ -114,7 +116,7 @@ public class IMWUC {
 				State newState = createNewState(now);
 				saveState(newState, config.stateFile);
 
-				List<IMWUCEntry> imwuc_results = IMWUCFeed.getEntries(oldState.lastUpdated.getTime());
+				List<IMWUCEntry> imwuc_results = IMWUCFeed.getEntries(oldState.lastUpdated.getTime(), config);
 				if (imwuc_results != null) { 
 					IMWUCFeed.postEntries(imwuc_results, config);
 				}

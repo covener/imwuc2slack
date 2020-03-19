@@ -14,4 +14,10 @@ public class Config {
 	
 	@JsonProperty("state-file")
 	public String stateFile;
+
+	@JsonProperty("channel")
+	public String channel;
+
+	@JsonProperty("feedURL")
+	public String feedURL;
 }

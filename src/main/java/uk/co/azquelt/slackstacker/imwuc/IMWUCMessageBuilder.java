@@ -1,5 +1,6 @@
 package uk.co.azquelt.slackstacker.imwuc;
 
+import uk.co.azquelt.slackstacker.Config;
 import uk.co.azquelt.slackstacker.slack.SlackMessage;
 
 /**
@@ -13,12 +14,13 @@ public class IMWUCMessageBuilder {
 	 * @param entry a parsed IMWUC entry
 	 * @return a message which includes the given question
 	 */
-	public static SlackMessage buildMessage(IMWUCEntry entry) {
+	public static SlackMessage buildMessage(IMWUCEntry entry, Config c) {
 		StringBuilder sb = new StringBuilder();
 		appendEntry(sb, entry);
 		
 		SlackMessage message = new SlackMessage();
 		message.text = sb.toString();
+		message.channel = c.channel;
 		
 		return message;
 	}
