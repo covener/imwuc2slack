@@ -2,11 +2,8 @@ package uk.co.azquelt.slackstacker;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.TimeZone;
 
 import javax.ws.rs.client.Client;
@@ -29,8 +26,6 @@ import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import uk.co.azquelt.slackstacker.imwuc.IMWUCEntry;
 import uk.co.azquelt.slackstacker.imwuc.IMWUCFeed;
 import uk.co.azquelt.slackstacker.slack.SlackMessage;
-import uk.co.azquelt.slackstacker.stack.Question;
-import uk.co.azquelt.slackstacker.stack.QuestionResponse;
 
 public class SlackStacker {
 	
@@ -41,62 +36,6 @@ public class SlackStacker {
 			.register(GZIPFeature.class) // Allow us to understand GZIP compressed pages
 			.build();
 
-	public static void main(String[] args) throws IOException {
-		
-		try {
-			stateMapper = new ObjectMapper();
-			
-			CommandLine arguments = CommandLine.processArgs(args);
-			
-			Config config = loadConfig(arguments.getConfigFile());
-			
-			State oldState = loadState(config.stateFile);
-			Calendar now = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-			
-			if (oldState != null) {
-				
-				if (oldState.backoffUntil != null && now.before(oldState.backoffUntil)) {
-					// We've been asked by the StackExchange API to back off, don't run
-					return;
-				}
-				
-				State newState = createNewState(now);
-
-				for (Map.Entry<String, List<String>> entry : config.tags.entrySet()) {
-					QuestionResponse questions = getQuestions(entry.getKey(), entry.getValue(), config.stackoverflowKey);
-					List<Question> newQuestions = filterOldQuestions(questions.items, oldState.lastUpdated, oldState.idsSeen);
-					postQuestions(newQuestions, config.slackWebhookUrl);
-					addToState(newState, questions.items);
-
-					if (questions.backoff > 0) {
-						Calendar backoffUntil = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-						backoffUntil.add(Calendar.SECOND, questions.backoff);
-						newState.backoffUntil = backoffUntil;
-						newState.idsSeen.addAll(oldState.idsSeen);
-						break;
-					}
-				}
-
-				saveState(newState, config.stateFile);
-
-
-				List<IMWUCEntry> imwuc_results = IMWUCFeed.getEntries(oldState.lastUpdated.getTime());
-				if (imwuc_results != null) { 
-					IMWUCFeed.postEntries(imwuc_results, config.slackWebhookUrl);
-				}
-
-
-			} else {
-				System.out.println("No pre-existing state, setting up default state file");
-				State newState = createDefaultState(now);
-				saveState(newState, config.stateFile);
-			}
-		} catch (InvalidArgumentException e) {
-			System.err.println(e.getMessage());
-		}
-		
-	}
-
 	private static void saveState(State newState, String stateFileName) throws JsonGenerationException, JsonMappingException, IOException {
 		File stateFile = new File(stateFileName);
 		stateMapper.writerWithDefaultPrettyPrinter().forType(State.class).writeValue(stateFile, newState);
@@ -105,30 +44,13 @@ public class SlackStacker {
 	private static State createDefaultState(Calendar now) {
 		State newState = new State();
 		newState.lastUpdated = now;
-		newState.idsSeen = Collections.emptyList();
 		return newState;
 	}
 
 	private static State createNewState(Calendar now) {
 		State newState = new State();
 		newState.lastUpdated = now;
-		newState.idsSeen = new ArrayList<>();
 		return newState;
-	}
-
-	private static void addToState(State state, List<Question> questions) {
-		for (Question question : questions) {
-			state.idsSeen.add(question.question_id);
-		}
-	}
-
-	private static void postQuestions(List<Question> newQuestions, String webhookUrl) throws IOException {
-		if (newQuestions.size() == 0) {
-			return; //Nothing to post!
-		}
-		for (Question question : newQuestions) {
-			post(MessageBuilder.buildMessage(question), webhookUrl);
-		}
 	}
 
 	public static void post(SlackMessage message, String webhookUrl) throws IOException { 
@@ -138,69 +60,6 @@ public class SlackStacker {
 		if (resp.getStatusInfo().getFamily() != Family.SUCCESSFUL) {
 			throw new IOException("Error posting messages to slack: " + resp.getStatusInfo().getReasonPhrase());
 		}
-	}
-
-	private static List<Question> filterOldQuestions(List<Question> questions, Calendar lastUpdated, List<String> idsSeen) {
-		
-		// Sometimes questions don't appear in the API immediately
-		// Add an additional 30 minutes of leeway
-		Calendar cutoffTime = (Calendar) lastUpdated.clone();
-		cutoffTime.add(Calendar.MINUTE, -30);
-		
-		List<Question> newQuestions = new ArrayList<>();
-		for (Question question : questions) {
-			if (!question.last_activity_date.before(cutoffTime) && !idsSeen.contains(question.question_id)) {
-				newQuestions.add(question);
-			}
-		}
-		return newQuestions;
-	}
-
-	private static QuestionResponse getQuestions(String site, List<String> tags, String apiKey) throws IOException {
-		
-		WebTarget target = client.target("https://api.stackexchange.com/2.2");
-		WebTarget questionTarget = target.path("search")
-				.queryParam("order", "desc")
-				.queryParam("sort", "creation")
-				.queryParam("site", site)
-				.queryParam("tagged", joinTags(tags));
-		
-		if (apiKey != null) {
-		    questionTarget = questionTarget.queryParam("key", apiKey);
-		}
-		
-		Invocation.Builder builder = questionTarget.request();
-		builder.accept(MediaType.APPLICATION_JSON);
-		builder.acceptEncoding("UTF-8");
-		
-		Response response = builder.get();
-		
-		if (response.getStatus() == 200) {
-			QuestionResponse questionResponse = response.readEntity(QuestionResponse.class);
-			return questionResponse;
-		} else {
-			System.out.println("Response: " + response.getStatus());
-			String string = response.readEntity(String.class);
-			throw new IOException("Getting questions failed. RC: " + response.getStatus() + " Response: " + string);
-		}
-	}
-	
-	/**
-	 * Joins a list of tags into a semi-colon separated string
-	 */
-	private static String joinTags(List<String> tags) {
-		StringBuilder sb = new StringBuilder();
-		
-		boolean first = true;
-		for (String tag : tags) {
-			if (!first) {
-				sb.append(";");
-			}
-			first = false;
-			sb.append(tag);
-		}
-		
-		return sb.toString();
 	}
 
 	private static State loadState(String stateFileName) throws JsonProcessingException, IOException, InvalidArgumentException {
@@ -233,4 +92,41 @@ public class SlackStacker {
 		return config;
 	}
 	
+	public static void main(String[] args) throws IOException {
+		
+		try {
+			stateMapper = new ObjectMapper();
+			
+			CommandLine arguments = CommandLine.processArgs(args);
+			
+			Config config = loadConfig(arguments.getConfigFile());
+			
+			State oldState = loadState(config.stateFile);
+			Calendar now = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+			
+			if (oldState != null) {
+				
+				if (oldState.backoffUntil != null && now.before(oldState.backoffUntil)) {
+					// We've been asked by the StackExchange API to back off, don't run
+					return;
+				}
+				
+				State newState = createNewState(now);
+				saveState(newState, config.stateFile);
+
+				List<IMWUCEntry> imwuc_results = IMWUCFeed.getEntries(oldState.lastUpdated.getTime());
+				if (imwuc_results != null) { 
+					IMWUCFeed.postEntries(imwuc_results, config.slackWebhookUrl);
+				}
+			} else {
+				System.out.println("No pre-existing state, setting up default state file");
+				State newState = createDefaultState(now);
+				saveState(newState, config.stateFile);
+			}
+		} catch (InvalidArgumentException e) {
+			System.err.println(e.getMessage());
+		}
+		
+	}
+
 }
