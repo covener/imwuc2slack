@@ -34,5 +34,9 @@ dependencies {
     implementation 'org.apache.cxf:cxf-rt-rs-client:3.0.+'
     implementation group: 'com.rometools', name: 'rome', version: '1.12.2'
     testImplementation 'junit:junit:4.+'
+//    annotationProcessor "com.sun.xml.bind:jaxb-core:2.3.0.1"
+    implementation group: 'javax.xml.ws', name: 'jaxws-api', version: '2.2.9'
+
+ //   annotationProcessor "javax.xml.bind:jaxb-api:2.3.1"
 }
 
