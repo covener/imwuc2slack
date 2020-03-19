@@ -87,6 +87,9 @@ public class IMWUC {
 		}
 		
 		Config config = stateMapper.readerFor(Config.class).readValue(configFile);
+		if (!config.stateFile.startsWith("/")) { 
+			config.stateFile = System.getProperty("user.home") + "/" + config.stateFile;
+		}
 		
 		return config;
 	}
